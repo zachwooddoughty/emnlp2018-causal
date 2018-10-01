@@ -12,6 +12,11 @@ from utils import gformula, fit_simple, fit_bernoulli
 
 
 def get_error_rate(proxy, truth, truth_val, confounds=None, confound_assn=None):
+  '''
+  Given a proxy (A*) and truth (A), calculate the error rate when A=1.
+  If confounds and confound_assn are given, limit this calculation to when
+    confounds have the given assignment
+  '''
   where = []
   if confounds is not None and confound_assn is not None:
     where = [confounds[i, :] == confound_assn[i] for i in range(len(confound_assn))]
@@ -30,6 +35,10 @@ def get_error_rate(proxy, truth, truth_val, confounds=None, confound_assn=None):
 
 
 def calculate_error_matrix(proxy, truth, confounds=None, debug=False):
+  '''
+    Given the proxy (A*) and truth (A), calculate the correction matrix
+    to adjust the causal effect calculations
+  '''
   errs = {}
   if confounds is None:
     confound_assns = [()]
@@ -44,22 +53,10 @@ def calculate_error_matrix(proxy, truth, confounds=None, debug=False):
   return errs
 
 
-def gformula_err(pyac, pc, pa, pcay, errs):
-  ''' Uses eq (8) from Pearl 2010, On Measurement Error in Causal Inference '''
-  tot_effect = 0
-  for a in [0, 1]:
-    a_multiplier = (-1, 1)[a]
-    my_pa = (1 - pa, pa)[a]
-    for c in [0, 1]:
-      my_pc = (1 - pc, pc)[c]
-      proxy_effect = a_multiplier * pyac[(a, c)] * my_pc
-      err = errs[c]
-      correction = (1 - err / pcay[(a, 1)]) * (1 - err / my_pc) / (1 - err * my_pa / my_pc)
-      tot_effect += proxy_effect * correction
-  return tot_effect
-
-
 def get_dist(dist, debug=False):
+  '''
+  Calculate the probability mass on all variable assignments
+  '''
   n = dist.shape[1]
   d = {}
   for assn in itertools.product(*[range(2) for _ in range(3)]):
@@ -70,23 +67,14 @@ def get_dist(dist, debug=False):
   return d
 
 
-def old_get_dist(dist, debug=False):
-  if debug:
-    print("getting dist for dist with shape {}".format(
-        dist.shape))
-  out = {}
-  for assn in itertools.product(*[range(2) for _ in dist]):
-    # raise ValueError("this is wrong. steal from get_error_rate")
-    where = [dist[i, :] == assn[i] for i in range(len(assn))]
-    where = np.all(np.stack(where, axis=0), axis=0)
-    prob = np.sum(where) / dist.shape[1]
-    if debug:
-      print("p(c'={}, a={}, y={}) = {:0.3f}".format(*(assn + (prob, ))))
-    out[assn] = prob
-  return out
-
-
 def get_corrected_dist(dist, errs, truth, proxied_index, confounds=(), debug=False):
+  '''
+  Given a proxy distribution dist, error estimates, and a held-out truth,
+    calculate the new dist that comes from using the error estimates to correct the proxy.
+  dist: p(C, A*, Y)
+  errs: p(A*, A)
+  truth: p(C, A, Y)
+  '''
   start = get_dist(dist)
 
   corrected = {}
@@ -101,8 +89,6 @@ def get_corrected_dist(dist, errs, truth, proxied_index, confounds=(), debug=Fal
     err1 = errs[(1, ) + tuple(confound_assn)]
     err0 = errs[(0, ) + tuple(confound_assn)]
 
-    if debug:
-      print("errors: {:0.3f} and {:0.3f}".format(err0, err1))
     corrected0 = (1 - err1) * start[tuple(assn0)] - err1 * start[tuple(assn1)]
     corrected0 /= (1 - err1 - err0)
     if np.isfinite(corrected0):
@@ -118,6 +104,7 @@ def get_corrected_dist(dist, errs, truth, proxied_index, confounds=(), debug=Fal
       corrected[tuple(assn1)] = start[tuple(assn1)]
 
     if debug:
+      print("errors: {:0.3f} and {:0.3f}".format(err0, err1))
       print("correcting took:")
       print("p(c'={}, a={}, y={}) from {:0.3f} to {:0.3f}, truth is {:0.3f}".format(
           *(assn0 + [start[tuple(assn0)], corrected0, truth[tuple(assn0)]])))
@@ -128,28 +115,31 @@ def get_corrected_dist(dist, errs, truth, proxied_index, confounds=(), debug=Fal
 
 
 def check_restoration(dist1, dist2):
+  '''
+  Calculate the L2 distance between two distributions as a sanity check.
+  ''' 
   dist_err = 0
   for key in dist1:
-    # print(key, true_dist[key], proxy_dist[key])
     dist_err += (dist1[key] - dist2[key]) ** 2
 
   return dist_err
 
 
 def dist_pyac(dist):
-  ''' Assume dist is ordered as c, a, y '''
+  '''
+  Assume dist is ordered as c, a, y
+  Given a distribution dictionary from get_dist, calculate p(Y=1 | A, C)
+  '''
   pyac = {}
   for a in [0, 1]:
     for c in [0, 1]:
-      # if (dist[(c, a, 1)] + dist[(c, a, 0)]) == 0:
-      #   pyac[(a, c)] = 0
-      # else:
-      pyac[(a, c)] = dist[(c, a, 1)] / (dist[(c, a, 1)] + dist[(c, a, 0)])
+      pyac[(c, a)] = dist[(c, a, 1)] / (dist[(c, a, 1)] + dist[(c, a, 0)])
 
   return pyac
 
 
-def dist_pc(dist, weird=False):
+def dist_pc(dist):
+  ''' Given a distribution dictionary from get_dist, calculate p(C=1) '''
   pc = 0
   for a in [0, 1]:
     for y in [0, 1]:
@@ -160,6 +150,11 @@ def dist_pc(dist, weird=False):
 
 def textless_impute(train, test, n, num_train,
                     proxy_i=1, confound_i=(), debug=False):
+  '''
+  Unused code for measurement error without text.
+  In our experiments, always led to singular matrix.
+  '''
+
   model = sklearn.linear_model.LogisticRegression()
   features = np.concatenate((train[:1, :], train[2:3, :]), axis=0)
   model.fit(np.transpose(features[:, :num_train]), train[proxy_i, :num_train])
@@ -204,8 +199,16 @@ def textless_impute(train, test, n, num_train,
   return new_dist
 
 
-def impute_and_correct(train, test, n, num_train,
+def impute_and_correct(train, test,  num_train,
                        proxy_i=1, confound_i=(), debug=False):
+  '''
+  train: training data
+  test: testing data
+  num_train: how many examples of training data to use for training,
+    (leaving the rest for development)
+  proxy_i: what is the index of the proxied variable (e.g. 1)
+  confound_i: what are the indices of the proxy's confounders (e.g. 0, 2)
+  '''
 
   # features are everything but the proxy variable
   train_features = np.concatenate((train[:proxy_i, :], train[1 + proxy_i:, :]), axis=0)
@@ -256,29 +259,27 @@ def impute_and_correct(train, test, n, num_train,
 
 
 def train_adjust(train, test, proxy_i=1, confound_i=(), debug=False):
+  '''
+  Given train and test data, train a logistic regression classifier to
+    impute a proxy for the missing variables, then calculate the errors
+    from an oracle in causal effect estimation.
+  '''
   n = test.shape[0]
 
   # use half the train set for training, half for dev and error calculation
   num_train = train.shape[1] // 2
 
-  # print("train/adjust with n={}, num_train={}".format(n, num_train))
-
   truth = test[:3, :]
   new_dist, proxy = impute_and_correct(train, test, n, num_train,
                                        proxy_i, confound_i, debug)
 
-  # textless = textless_impute(train, test, n, num_train,
-  #                                      proxy_i, (), debug)
   oracle_effect = gformula(dist_pyac(get_dist(truth)), dist_pc(get_dist(truth)))
 
   # Instead of training our model for the mismeasurement, just report
   #   the causal effect present in the training dataset
-
   naive_effect = gformula(fit_simple(
       np.transpose(train[:2, :]), train[2, :]),
       fit_bernoulli(train[0, :]))
-
-  # textless_effect = gformula(dist_pyac(textless), dist_pc(textless))
 
   misspecified_effect = gformula(dist_pyac(get_dist(proxy)), dist_pc(get_dist(proxy)))
   corrected_effect = gformula(dist_pyac(new_dist), dist_pc(new_dist))
@@ -286,7 +287,6 @@ def train_adjust(train, test, proxy_i=1, confound_i=(), debug=False):
   if debug:
     print("True dist gives effect: {:0.3f}".format(oracle_effect))
     print("Naive approach gives effect: {:0.3f}".format(naive_effect))
-    # print("Textless approach gives effect: {:0.3f}".format(textless_effect))
     print("Misspecified dist gives effect: {:0.3f}".format(misspecified_effect))
     print("corrected dist gives effect: {:0.3f}".format(corrected_effect))
 
@@ -295,6 +295,10 @@ def train_adjust(train, test, proxy_i=1, confound_i=(), debug=False):
 
 
 def synthetic(n_examples, n_train, **kwargs):
+  '''
+  Run a synthetic experiment using n_examples examples in target dataset p(A*, C, Y)
+  and n_train examples of external data to estimate p(A*, A)
+  '''
   np.random.seed(42)
 
   proxy_i = 1
@@ -320,6 +324,10 @@ def synthetic(n_examples, n_train, **kwargs):
 
 
 def yelp(n_examples, n_train, **kwargs):
+  '''
+  Run a Yelp experiment using n_examples examples in target dataset p(A*, C, Y)
+  and n_train examples of external data to estimate p(A*, A)
+  '''
   proxy_i = 1
   confound_i = (0, 2, )
 

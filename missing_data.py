@@ -10,6 +10,10 @@ from utils import fit_bernoulli, fit_simple, impute, fit_logis, logis_proba, gfo
 
 
 def textless_mi(truth, mask, k):
+  '''
+  Multiple imputation without using text data
+  This corresponds to "no_text" in the paper, \S 5.3.2
+  '''
   c, a, y = truth
 
   obs_i = [i for i in range(len(mask)) if not mask[i]]
@@ -44,12 +48,16 @@ def textless_mi(truth, mask, k):
 
 
 def bad_mis(truth, t, mask, k):
+  '''
+  Multiple imputation without accounting for y
+  This corresponds to "no_y" in the paper, \S 5.3.3 
+  '''
   c, a, y = truth
 
   obs_i = [i for i in range(len(mask)) if not mask[i]]
   missing_i = [i for i in range(len(mask)) if mask[i]]
   a_imputed = impute(
-      (c[obs_i], t[obs_i]),
+      (c[obs_i], t[obs_i]),  # NOTE y[obs_i] is intentionally left out
       a[obs_i],
       (c[missing_i], t[missing_i]))
 
@@ -78,6 +86,9 @@ def bad_mis(truth, t, mask, k):
 
 
 def mi(truth, t, mask, k):
+  '''
+  Correct multiple imputation implementation
+  '''
   c, a, y = truth
 
   obs_i = [i for i in range(len(mask)) if not mask[i]]
@@ -112,54 +123,10 @@ def mi(truth, t, mask, k):
   return pyac
 
 
-def textless(truth, mask):
-
-  c, a, y = truth
-
-  full_pc = fit_bernoulli(c)
-  full_pyc = fit_simple(c, y)
-
-  obs_i = [i for i in range(len(mask)) if not mask[i]]
-  # cc_pacy = fit_simple((c[obs_i], y[obs_i]), a[obs_i])
-  cc_pacy = fit_logis((c[obs_i], y[obs_i]), a[obs_i])
-
-  total_effect = 0
-  for a in [0, 1]:
-    a_multiplier = (-1, 1)[a]
-    a_effect = 0
-    for c in [0, 1]:
-      # calculate numerator
-      pyc_num = full_pyc[(c,)]
-      # pacy_num = cc_pacy[(c, 1)]
-      inp = np.array([c, 1]).reshape(1, -1)
-      pacy_num = logis_proba(cc_pacy, inp)
-      if a == 0:
-        pacy_num = 1 - pacy_num
-      num = pyc_num * pacy_num
-
-      # calculate denominator
-      denom = 0
-      for y in [0, 1]:
-        # pacy_denom = cc_pacy[(c, y)]
-        inp = np.array([c, y]).reshape(1, -1)
-        pacy_denom = logis_proba(cc_pacy, inp)
-        if a == 0:
-          pacy_denom = 1 - pacy_denom
-        pyc_denom = full_pyc[(c,)]
-        if y == 0:
-          pyc_denom = 1 - pyc_denom
-        denom += pacy_denom * pyc_denom
-
-      # calculate full term for the c summation
-      pc = (1 - full_pc, full_pc)[c]
-      a_effect += pc * num / denom
-
-    total_effect += a_multiplier * a_effect
-
-  return total_effect
-
-
 def yelp(n_examples, **kwargs):
+  '''
+  Run a Yelp experiment using n_examples examples
+  '''
   args = synthetic_config.copy()
   args.update(kwargs)
 
@@ -177,6 +144,9 @@ def yelp(n_examples, **kwargs):
 
 
 def synthetic(n_examples, **kwargs):
+  '''
+  Run a synthetic experiment using n_examples examples
+  '''
   np.random.seed(42)
 
   config = synthetic_config.copy()
@@ -193,6 +163,9 @@ def synthetic(n_examples, **kwargs):
 
 
 def experiment(c, a, y, t, mask, debug=False):
+  '''
+  Accept data columns from dataset wrapper function and run experiment 
+  '''
   obs_i = [i for i in range(len(mask)) if not mask[i]]
 
   full_pc = fit_bernoulli(c)

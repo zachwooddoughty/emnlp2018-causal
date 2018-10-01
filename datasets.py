@@ -17,6 +17,7 @@ synthetic_config = {
 
 class YelpData:
   def __init__(self, workdir, n_vocab, min_freq=1000, **kwargs):
+    ''' Create a Yelp dataset '''
 
     vocabfn = "vocab.{}.{}.gz".format(n_vocab, min_freq)
     if not os.path.exists(os.path.join(workdir, vocabfn)):
@@ -39,6 +40,11 @@ class YelpData:
     self.max_seen = 0
 
   def load(self, num_examples, allow_overlap=False, enforce_full=True):
+    '''
+    Load num_examples from files and return a numpy array.
+    allow_overlap: subsequent calls to load() can re-use data from previous calls.
+    enforce_full: if we haven't preprocessed enough data, raise an error.
+    '''
 
     if len(self.dataset) >= num_examples:
       if allow_overlap:
@@ -79,6 +85,9 @@ class YelpData:
     return dataset
 
   def mar(self, truth, confounds):
+    '''
+    Return a MAR missingness mask of which examples should have the treatment hidden.
+    '''
     n = truth.shape[0]
     confounds = maybe_stack(confounds)
 
@@ -89,6 +98,8 @@ class YelpData:
 
 class SyntheticData:
   def __init__(self, **kwargs):
+    ''' Create a synthetic dataset '''
+
     self.c_bias = 0.4
     self.a_bias = 0.40
     self.ca_effect = -0.3
@@ -120,6 +131,7 @@ class SyntheticData:
         *np.random.normal(0, self.missing_effect_std, self.vocab_size))
 
   def sample_truth(self, n):
+    ''' Sample n (c, a, y) examples from our synthetic distribution '''
     c = np.random.choice([0, 1], n, p=(1 - self.c_bias, self.c_bias))
 
     a_prob = self.a_bias * np.ones(n) + self.ca_effect * c
@@ -131,6 +143,7 @@ class SyntheticData:
     return (c, a, y)
 
   def sample_text(self, truth):
+    ''' Sample text variables from the (c, a, y) truth variables '''
     truth = maybe_stack(truth)
     n = truth.shape[0]
     topic = np.tile(self.topic_bias, n).reshape(n, self.vocab_size)
@@ -146,6 +159,7 @@ class SyntheticData:
     return words
 
   def mar(self, truth, confounds):
+    ''' Return a MAR missingness mask of which examples should have the treatment hidden. '''
     n = truth.shape[0]
     confounds = maybe_stack(confounds)
 

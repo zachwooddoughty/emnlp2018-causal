@@ -21,6 +21,7 @@ stopwords = stopwords.words('english')
 
 
 class NumpySerializer(json.JSONEncoder):
+  ''' Helper class to write numpy to json '''
   def default(self, obj):
     if isinstance(obj, np.integer):
       return int(obj)
@@ -33,6 +34,7 @@ class NumpySerializer(json.JSONEncoder):
 
 
 def load_users(workdir, userfn):
+  ''' Load which users received at least one useful flag '''
   user_usefuls = {}
   with open(userfn) as inf:
     for line in inf:
@@ -45,6 +47,7 @@ def load_users(workdir, userfn):
 
 
 def get_words(text, vocab=None):
+  ''' Given words and text, return vectors '''
   words = word_tokenize(text.lower())
   words = [word for word in words if word not in stopwords]
   stems = []
@@ -56,18 +59,21 @@ def get_words(text, vocab=None):
     return set([vocab[stem] for stem in stems if stem in vocab])
 
 
-def build_vocab(workdir, reviewfn, N=1000000, min_freq=10):
+def build_vocab(workdir, reviewfn, n_vocab=1000000, min_freq=10):
+  '''
+  Build the vocab using n_vocab reviews and only counting words that appear at least min_freq times
+  '''
   vocab = {}
   start = time.time()
 
-  freqs_fn = os.path.join(workdir, "freqs.{}.gz".format(N))
-  vocab_fn = os.path.join(workdir, "vocab.{}.{}.gz".format(N, min_freq))
+  freqs_fn = os.path.join(workdir, "freqs.{}.gz".format(n_vocab))
+  vocab_fn = os.path.join(workdir, "vocab.{}.{}.gz".format(n_vocab, min_freq))
   if os.path.exists(freqs_fn) and os.path.exists(vocab_fn):
     logging.warn("vocab already exists, skipping")
     return None
 
   with open(reviewfn, encoding='utf8') as inf:
-    for i in range(N):
+    for i in range(n_vocab):
       if (i + 1) % 10000 == 0:
         logging.warn("{} processed in {:.1f} seconds".format(i + 1, time.time() - start))
       line = inf.readline()
@@ -78,29 +84,31 @@ def build_vocab(workdir, reviewfn, N=1000000, min_freq=10):
         vocab[word] = vocab.get(word, 0) + 1
 
   vocab = {key: val for key, val in vocab.items() if val >= min_freq}
-  # logging.warn("We found {} words with freq >= {}".format(len(vocab), min_freq))
   with gzip.open(freqs_fn, "wb") as outf:
     outf.write(json.dumps(vocab, cls=NumpySerializer).encode('utf8'))
 
   indices = {}
   for i, key in enumerate(vocab.keys()):
     indices[key] = i
-  vocab_fn = os.path.join(workdir, "vocab.{}.{}.gz".format(N, min_freq))
+  vocab_fn = os.path.join(workdir, "vocab.{}.{}.gz".format(n_vocab, min_freq))
   with gzip.open(vocab_fn, "wb") as outf:
     outf.write(json.dumps(indices, cls=NumpySerializer).encode('utf8'))
 
   return vocab
 
 
-def load_vocab(workdir, N, min_freq):
-  vocab_fn = os.path.join(workdir, "vocab.{}.{}.gz".format(N, min_freq))
+def load_vocab(workdir, n_vocab, min_freq):
+  ''' Load an existing vocab '''
+  vocab_fn = os.path.join(workdir, "vocab.{}.{}.gz".format(n_vocab, min_freq))
   with gzip.open(vocab_fn, "rb") as inf:
     vocab = json.loads("".join(x.decode() for x in inf))
   return vocab
 
 
-def build_dataset(workdir, reviewfn, user_usefuls,
-                  total, vocab=None, outfn=None):
+def build_dataset(workdir, reviewfn, user_usefuls, total, vocab=None, outfn=None):
+  '''
+  Build a dataset using an existing vocab
+  '''
   reviews = []
 
   total = int(total)
@@ -194,7 +202,7 @@ def main():
 
   # Build/load vocab using n_vocab examples
   vocab = build_vocab(args.workdir, reviewfn,
-                      min_freq=args.min_freq, N=args.n_vocab)
+                      min_freq=args.min_freq, n_vocab=args.n_vocab)
   if vocab is None:
     vocab = load_vocab(args.workdir, args.n_vocab, args.min_freq)
 

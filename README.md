@@ -4,6 +4,8 @@ To get the raw data, either:
  - download latest Yelp dataset from https://www.yelp.com/dataset/download, or:
  - email zach@cs.jhu.edu to get the exact data used for the paper.
 
+To get started with the code, create a python3 virtualenv and run ```pip install -r requirements.txt```.
+
 To preprocess the data, run ```python build_yelp_dataset.py n_vocab min_freq --workdir raw_data_directory/```
  - ```n_vocab``` is the number of reviews to load in creating the word vocabulary.
  - ```min_freq``` is the minimum frequency a word can occur in those ```n_vocab``` reviews to be included.
