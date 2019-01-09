@@ -199,7 +199,7 @@ def textless_impute(train, test, n, num_train,
   return new_dist
 
 
-def impute_and_correct(train, test,  num_train,
+def impute_and_correct(train, test, n, num_train,
                        proxy_i=1, confound_i=(), debug=False):
   '''
   train: training data
