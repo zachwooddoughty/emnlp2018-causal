@@ -247,6 +247,8 @@ def impute_and_correct(train, test, n, num_train,
     print("Test acc: {:0.3f}".format(model.score(np.transpose(test_features), test[proxy_i, :])))
     print("true dist")
     print(get_dist(truth, debug))
+    print("new dist")
+    print(new_dist)
     print("proxy dist")
     print(get_dist(proxy, debug))
     print("start err: {:0.3e}".format(start_err))
@@ -362,7 +364,7 @@ def main():
   args = parser.parse_args()
 
   n_examples = int(10 ** args.logn_examples)
-  n_train = max(1000, n_examples // 100)
+  n_train = max(1000, n_examples // 10)
   if args.debug:
     print("measure", n_examples, n_train, args.k, args.dataset, args.min_freq)
 
