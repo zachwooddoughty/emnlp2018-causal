@@ -190,14 +190,14 @@ def main():
   elif os.path.exists(os.path.join(args.workdir, args.reviewfn)):
     reviewfn = os.path.join(args.workdir, args.reviewfn)
   else:
-    logging.error("Can't find review file at {}".format(reviewfn))
+    logging.error("Can't find review file at {}".format(args.reviewfn))
     return
   if os.path.exists(args.userfn):
     userfn = args.userfn
   elif os.path.exists(os.path.join(args.workdir, args.userfn)):
     userfn = os.path.join(args.workdir, args.userfn)
   else:
-    logging.error("Can't find user file at {}".format(userfn))
+    logging.error("Can't find user file at {}".format(args.userfn))
     return
 
   # Build/load vocab using n_vocab examples
